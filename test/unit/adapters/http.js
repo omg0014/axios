@@ -68,6 +68,17 @@ const nodeMajorVersion = nodeVersion[0];
 
 var noop = () => {};
 
+const supportsAbortReason = (() => {
+  try {
+    const controller = new AbortController();
+    const marker = {};
+    controller.abort(marker);
+    return controller.signal && controller.signal.reason === marker;
+  } catch (err) {
+    return false;
+  }
+})();
+
 describe('supports http with nodejs', function () {
   afterEach(async function () {
     await Promise.all([stopHTTPServer(server), stopHTTPServer(server2), stopHTTPServer(proxy)]);
@@ -2151,6 +2162,39 @@ describe('supports http with nodejs', function () {
       await assert.rejects(() => pipelineAsync([data, devNull()]));
 
       assert.strictEqual(streamError && streamError.code, 'ERR_CANCELED');
+    });
+
+    it('should preserve abort reason from AbortController', async function () {
+      if (!supportsAbortReason) {
+        this.skip();
+      }
+
+      server = await startHTTPServer({
+        rate: 100_000,
+        useBuffering: true
+      });
+
+      const controller = new AbortController();
+      const reason = new Error('Stop please');
+      const payload = Buffer.alloc(1024 * 1024);
+
+      const requestPromise = axios.post(LOCAL_SERVER_URL, payload, {
+        responseType: 'stream',
+        signal: controller.signal,
+        maxRedirects: 0
+      });
+
+      setTimeout(() => {
+        controller.abort(reason);
+      }, 100);
+
+      await assert.rejects(requestPromise, error => {
+        assert.ok(error instanceof AxiosError);
+        assert.strictEqual(error.code, AxiosError.ERR_CANCELED);
+        assert.strictEqual(error.message, reason.message);
+        assert.strictEqual(error.cause, reason);
+        return true;
+      });
     });
   })
 

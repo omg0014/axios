@@ -3,6 +3,16 @@ const CancelToken = axios.CancelToken;
 import {AbortController as _AbortController} from 'abortcontroller-polyfill/dist/cjs-ponyfill.js';
 
 const envAbortController = typeof AbortController === 'function' ? AbortController : _AbortController;
+const supportsAbortReason = (() => {
+  try {
+    const controller = new envAbortController();
+    const marker = {};
+    controller.abort(marker);
+    return controller.signal && controller.signal.reason === marker;
+  } catch (err) {
+    return false;
+  }
+})();
 
 describe('cancel', function() {
   beforeEach(function() {
@@ -108,6 +118,38 @@ describe('cancel', function() {
       // call cancel() when the request has been sent, but a response has not been received
       controller.abort();
       setTimeout(function(){
+        request.respondWith({
+          status: 200,
+          responseText: 'OK'
+        });
+      }, 0);
+    });
+  });
+
+  it('should preserve abort reason from AbortController', function(done) {
+    if (!supportsAbortReason) {
+      pending('AbortController reason is not supported in this environment');
+      done();
+      return;
+    }
+
+    const controller = new envAbortController();
+    const reason = new Error('Stop please');
+
+    axios.get('/foo/bar', {
+      signal: controller.signal
+    }).then(function() {
+      done.fail('Has not been canceled');
+    }, function(thrown) {
+      expect(thrown).toEqual(jasmine.any(Cancel));
+      expect(thrown.message).toBe(reason.message);
+      expect(thrown.cause).toBe(reason);
+      done();
+    });
+
+    getAjaxRequest().then(function(request) {
+      controller.abort(reason);
+      setTimeout(function() {
         request.respondWith({
           status: 200,
           responseText: 'OK'

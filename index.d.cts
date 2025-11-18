@@ -125,6 +125,8 @@ declare class AxiosError<T = unknown, D = any> extends Error {
 }
 
 declare class CanceledError<T> extends AxiosError<T> {
+  readonly name: "CanceledError";
+  readonly reason: any;
 }
 
 declare class Axios {
