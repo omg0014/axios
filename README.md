@@ -921,6 +921,58 @@ axios.get('/user/12345')
   });
 ```
 
+### Handling Request Timeouts with async/await
+
+When using async/await syntax, you can handle timeout errors using try/catch:
+
+```js
+async function fetchUser() {
+  try {
+    const response = await axios.get('/user/12345', {
+      timeout: 5000 // Request will timeout after 5 seconds
+    });
+    console.log(response.data);
+  } catch (error) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      console.log('Request timed out');
+      // Handle timeout error
+    } else if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.log(error.response.data);
+      console.log(error.response.status);
+      console.log(error.response.headers);
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.log(error.request);
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.log('Error', error.message);
+    }
+  }
+}
+```
+
+To get `ETIMEDOUT` instead of `ECONNABORTED` for timeout errors, set `transitional.clarifyTimeoutError` to `true`:
+
+```js
+async function fetchUserWithClarifiedTimeout() {
+  try {
+    const response = await axios.get('/user/12345', {
+      timeout: 5000,
+      transitional: {
+        clarifyTimeoutError: true
+      }
+    });
+    console.log(response.data);
+  } catch (error) {
+    if (error.code === 'ETIMEDOUT') {
+      console.log('Request timed out after', error.config.timeout, 'ms');
+    }
+  }
+}
+```
+
 ## Cancellation
 
 ### AbortController
